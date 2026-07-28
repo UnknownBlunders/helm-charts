@@ -1,0 +1,13 @@
+capacity: 5Gi
+pvcStorageClassName: ceph-block
+pvcAccessMode: ReadWriteOnce
+moverUser: 1000
+moverGroup: 1000
+moverStorageClassName: ceph-block
+volumeSnapshotClassName: csi-ceph-blockpool
+schedule: H * * * *
+retention:
+  keepLatest: 3
+  keepHourly: 24
+  keepDaily: 7
+  keepWeekly: 4

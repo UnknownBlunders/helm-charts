@@ -1,0 +1,60 @@
+name: Package and publish changed charts
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/Chart.yaml'
+permissions:
+  contents: read
+  packages: write
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # need full history so the diff against `before` works
+      - name: Get changed Chart.yaml files
+        id: changed
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.event.after }}"
+
+          # Only top-level Chart.yaml files, skip anything under a charts/ subdir
+          FILES=$(git diff --name-only "$BEFORE" "$AFTER" -- '**/Chart.yaml' | grep -v '/charts/')
+
+          echo "Changed Chart.yaml files:"
+          echo "$FILES"
+
+          {
+            echo "files<<EOF"
+            echo "$FILES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
+            --username "${{ github.actor }}" \
+            --password-stdin
+      - name: Package and push each changed chart
+        run: |
+          mkdir -p dist
+
+          # GHCR requires lowercase repo path
+          REPO_OWNER_LOWER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+
+          while IFS= read -r chart_yaml; do
+            [ -z "$chart_yaml" ] && continue
+            chart_dir=$(dirname "$chart_yaml")
+
+            echo "Packaging $chart_dir"
+            helm package "$chart_dir" -d dist/
+
+            # Derive the exact package filename from Chart.yaml so name/version match
+            name=$(yq -r '.name' "$chart_yaml")
+            version=$(yq -r '.version' "$chart_yaml")
+            pkg="dist/${name}-${version}.tgz"
+
+            echo "Pushing $pkg to oci://ghcr.io/${REPO_OWNER_LOWER}/charts"
+            helm push "$pkg" "oci://ghcr.io/${REPO_OWNER_LOWER}/charts"
+          done <<< "${{ steps.changed.outputs.files }}"
