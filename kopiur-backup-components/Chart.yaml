@@ -1,4 +1,4 @@
 apiVersion: v2
 name: kopiur-backup-components
-version: 0.1.0
+version: 0.1.1
 description: A minimal Helm chart which provides the components for a kopiur backed up pvc
